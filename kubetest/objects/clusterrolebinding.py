@@ -3,6 +3,7 @@
 import logging
 
 from kubernetes import client
+from kubernetes.client.rest import ApiException
 
 from .api_object import ApiObject
 
@@ -41,9 +42,17 @@ class ClusterRoleBinding(ApiObject):
             f'creating clusterrolebinding "{self.name}" in namespace "{self.namespace}"')
         log.debug(f'clusterrolebinding: {self.obj}')
 
-        self.obj = self.api_client.create_cluster_role_binding(
-            body=self.obj,
-        )
+        try:
+            self.obj = self.api_client.create_cluster_role_binding(
+                body=self.obj,
+            )
+        except ApiException as e:
+            if e.status == 409 and e.reason == 'Conflict':
+                # If we have a conflict, just load the existing object and continue
+                self.refresh()
+                return
+            else:
+                raise e
 
     def delete(self, options: client.V1DeleteOptions = None) -> client.V1Status:
         """Delete the ClusterRoleBinding.
